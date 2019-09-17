@@ -66,24 +66,6 @@ class E4StreamingClient(threading.Thread):
     def __send(self, cmd: str):
         self.socket.sendall(cmd.encode('utf-8'))
 
-    def list_devices(self):
-        self.__send(gen_command_string(CmdID.DEV_LIST))
+    def send_command(self, cmd_id: CmdID, **kwargs):
+        self.__send(gen_command_string(cmd_id, **kwargs))
 
-    def connect_device(self, device_id: str):
-        pass
-
-    def disconnect_current_device(self):
-        pass
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-
-
-if __name__ == '__main__':
-    client = E4StreamingClient('192.168.56.101', 5000)
-    while True:
-        client.list_devices()
-        time.sleep(5)
