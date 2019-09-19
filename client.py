@@ -5,7 +5,7 @@ import sys
 import threading
 import time
 
-from protocol import CmdID, gen_command_string
+from protocol import CmdID, gen_command_string, parse_incoming_message
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
@@ -52,33 +52,32 @@ class E4StreamingClient(threading.Thread):
         self.recv_thread = threading.Thread(target=self.__recv, daemon=True)
         self.recv_thread.start()
 
-    def __parse_incoming(self, msg):
-        pass
-
     def __recv(self):
         self.logger.debug('Starting receiving thread...')
 
         data = b''
         while True:
-            data += self.socket.recv(1024)
+            # small block size since messages are short
+            data += self.socket.recv(64)
 
-            # check if we received a full response
-            raw_msg, lim, rest = data.partition(E4StreamingClient.__delim)
-            if len(lim) == len(rest) == 0:
-                data = raw_msg
-                continue
+            # split up responses and process them
+            while True:
+                raw_msg, lim, rest = data.partition(E4StreamingClient.__delim)
+                if len(lim) == len(rest) == 0:
+                    # no remaining complete messages, read again from socket
+                    break
 
-            # save the incomplete rest of the incoming data (TCP streams can
-            # be split haphazardly...)
-            data = rest
+                data = rest  # save the remaining data for further processing
 
-            # parse the response
-            message = raw_msg.decode('utf-8')
-            self.logger.debug(message)
+                # parse the first extracted response
+                message = raw_msg.decode('utf-8')
+                self.logger.debug(f'Raw incoming message: {message}')
 
-            response = self.__parse_incoming(message)
+                parsed_msg = parse_incoming_message(message)
+                self.logger.debug(f'Parsed message: {parsed_msg}')
 
     def __send(self, cmd: str):
+        self.logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
         self.socket.sendall(cmd.encode('utf-8'))
 
     def send_command(self, cmd_id: CmdID, **kwargs):
