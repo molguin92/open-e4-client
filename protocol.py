@@ -34,7 +34,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, NamedTuple, Optional
+from typing import Dict, NamedTuple, Optional, Tuple, Type, Union, Set, List
 
 
 class NoSuchCommandError(Exception):
@@ -43,6 +43,34 @@ class NoSuchCommandError(Exception):
 
 class MissingArgumentError(Exception):
     pass
+
+
+class ServerCommandGenerator:
+    def __init__(self, cmd_id: CmdID, cmd, args: Dict[str, Type]):
+        self._cmd_id = cmd_id
+        self._cmd = cmd
+        self._args = args
+
+    def gen_cmd_string(self, **kwargs) -> str:
+        assert len(kwargs) == len(self._args)
+        for kwarg, val in kwargs.items():
+            if kwarg not in self._args:
+                raise RuntimeError(f'Unexpected argument \'{kwarg}\' for '
+                                   f'command {self._cmd}.')
+            if type(val) != self._args[kwarg]:
+                raise RuntimeError(f'Wrong type for argument \'{kwarg}\' for '
+                                   f'command {self._cmd}. '
+                                   f'Expected {self._args[kwarg]}, but '
+                                   f'got {type(val)}.')
+
+            # turn booleans into on/off
+            if type(val) == bool:
+                kwargs[kwarg] = 'ON' if val else 'OFF'
+
+        # generate the actual string
+        return f'{self._cmd} ' + \
+               ' '.join([f'{kwargs[k]}' for k, _ in self._args.items()]) + \
+               '\r\n'
 
 
 class CmdID(Enum):
@@ -56,31 +84,45 @@ class CmdID(Enum):
     DEV_PAUSE = 7
 
 
-_cmd_fmt: Dict[CmdID, str] = {
-    CmdID.DEV_DISCOVER       : 'device_discover_list\r\n',
-    CmdID.DEV_CONNECT_BTLE   : 'device_connect_btle {dev} {timeout}\r\n',
-    CmdID.DEV_DISCONNECT_BTLE: 'device_disconnect_btle {dev}\r\n',
-    CmdID.DEV_LIST           : 'device_list\r\n',
-    CmdID.DEV_CONNECT        : 'device_connect {dev}\r\n',
-    CmdID.DEV_DISCONNECT     : 'device_disconnect\r\n',
-    CmdID.DEV_SUBSCRIBE      : 'device_subscribe {stream} {on}\r\n',
-    CmdID.DEV_PAUSE          : 'pause {on}\r\n'
-}
+# set up mappings for the commands
+_id_to_cmd = {}
+_str_to_cmd = {}
+_cmd_set: List[Tuple[CmdID, str, Dict[str, Type]]] = [
+    (CmdID.DEV_DISCOVER, 'device_discover_list', {}),
+    (CmdID.DEV_CONNECT_BTLE, 'device_connect_btle',
+     {'dev': str, 'timeout': int}),
+    (CmdID.DEV_DISCONNECT_BTLE, 'device_disconnect_btle', {'dev': str}),
+    (CmdID.DEV_LIST, 'device_list', {}),
+    (CmdID.DEV_CONNECT, 'device_connect', {'dev': str, 'timeout': int}),
+    (CmdID.DEV_DISCONNECT, 'device_disconnect', {}),
+    (CmdID.DEV_SUBSCRIBE, 'device_subscribe', {'stream': str, 'on': bool}),
+    (CmdID.DEV_PAUSE, 'pause', {'on': bool})
+]
+
+for cmd_id, cmd, args in _cmd_set:
+    cmd_gen = ServerCommandGenerator(cmd_id, cmd, args)
+    _id_to_cmd[cmd_id] = cmd_gen
+    _str_to_cmd[cmd] = cmd_gen
 
 
 class DataStream(Enum):
-    ACC = 0,
-    GSR = 1,
-    BVP = 2,
-    TEMP = 3,
-    IBI = 4,
-    HR = 5,
-    BAT = 6,
+    ACC = 0
+    GSR = 1
+    BVP = 2
+    TEMP = 3
+    IBI = 4
+    HR = 5
+    BAT = 6
     TAG = 7
 
 
+class ServerMessageType(Enum):
+    STATUS_RESP = 0
+    STREAM_DATA = 1
+
+
 class CmdStatus(Enum):
-    SUCCESS = 0,
+    SUCCESS = 0
     ERROR = 1
 
 
@@ -90,18 +132,11 @@ class StatusResponse(NamedTuple):
     msg: Optional[str]
 
 
+class StreamingDataSample(NamedTuple):
+    stream: DataStream
+    timestamp: float
+    data: Tuple
+
 
 def gen_command_string(cmd_id: CmdID, **kwargs) -> str:
-    # preprocess args: booleans need to be turned into on/off:
-    for k, v in kwargs.items():
-        if type(v) == bool:
-            kwargs[k] = 'ON' if v else 'OFF'
-
-    cmd_str = _cmd_fmt.get(cmd_id, None)
-    if cmd_str is not None:
-        try:
-            return cmd_str.format(**kwargs)
-        except KeyError as e:
-            raise MissingArgumentError(*e.args) from e
-    else:
-        raise NoSuchCommandError(cmd_id)
+    return _id_to_cmd[cmd_id].gen_cmd_string(**kwargs)
