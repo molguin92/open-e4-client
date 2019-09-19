@@ -1,4 +1,5 @@
 import logging
+import queue
 import socket
 import sys
 import threading
@@ -18,6 +19,10 @@ class E4StreamingClient(threading.Thread):
         super().__init__()
 
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # set up buffers for responses and subscriptions
+        self.resp_q = queue.Queue(maxsize=1)
+        self.sub_q = queue.Queue()
 
         self.logger.info(f'Connecting to {server_ip}:{server_port}...')
 
@@ -47,6 +52,9 @@ class E4StreamingClient(threading.Thread):
         self.recv_thread = threading.Thread(target=self.__recv, daemon=True)
         self.recv_thread.start()
 
+    def __parse_incoming(self, msg):
+        pass
+
     def __recv(self):
         self.logger.debug('Starting receiving thread...')
 
@@ -55,17 +63,23 @@ class E4StreamingClient(threading.Thread):
             data += self.socket.recv(1024)
 
             # check if we received a full response
-            response, lim, rest = data.partition(E4StreamingClient.__delim)
+            raw_msg, lim, rest = data.partition(E4StreamingClient.__delim)
             if len(lim) == len(rest) == 0:
-                data = response
-            else:
-                data = rest
-                result = response.decode('utf-8')
-                self.logger.debug(result)
+                data = raw_msg
+                continue
+
+            # save the incomplete rest of the incoming data (TCP streams can
+            # be split haphazardly...)
+            data = rest
+
+            # parse the response
+            message = raw_msg.decode('utf-8')
+            self.logger.debug(message)
+
+            response = self.__parse_incoming(message)
 
     def __send(self, cmd: str):
         self.socket.sendall(cmd.encode('utf-8'))
 
     def send_command(self, cmd_id: CmdID, **kwargs):
         self.__send(gen_command_string(cmd_id, **kwargs))
-
