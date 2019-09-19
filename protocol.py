@@ -17,7 +17,13 @@
 #
 # <COMMAND> <ARGUMENT_LIST>
 # Example:
-# R device_subscribe acc ON
+# R device_subscribe acc OK
+#
+# Errors:
+# R device_connect_btle ERR could not connect device over BTLE
+#
+# Status
+# R device_connect OK
 #
 # Messages from server containing data from device are in the following format
 #
@@ -28,7 +34,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict
+from typing import Dict, NamedTuple, Optional
 
 
 class NoSuchCommandError(Exception):
@@ -60,6 +66,29 @@ _cmd_fmt: Dict[CmdID, str] = {
     CmdID.DEV_SUBSCRIBE      : 'device_subscribe {stream} {on}\r\n',
     CmdID.DEV_PAUSE          : 'pause {on}\r\n'
 }
+
+
+class DataStream(Enum):
+    ACC = 0,
+    GSR = 1,
+    BVP = 2,
+    TEMP = 3,
+    IBI = 4,
+    HR = 5,
+    BAT = 6,
+    TAG = 7
+
+
+class CmdStatus(Enum):
+    SUCCESS = 0,
+    ERROR = 1
+
+
+class StatusResponse(NamedTuple):
+    command: CmdID
+    status: CmdStatus
+    msg: Optional[str]
+
 
 
 def gen_command_string(cmd_id: CmdID, **kwargs) -> str:
