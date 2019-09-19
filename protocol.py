@@ -57,8 +57,8 @@ _cmd_fmt: Dict[CmdID, str] = {
     CmdID.DEV_LIST           : 'device_list\r\n',
     CmdID.DEV_CONNECT        : 'device_connect {dev}\r\n',
     CmdID.DEV_DISCONNECT     : 'device_disconnect\r\n',
-    CmdID.DEV_SUBSCRIBE      : 'device_subscribe {stream} {status}\r\n',
-    CmdID.DEV_PAUSE          : 'pause {status}\r\n'
+    CmdID.DEV_SUBSCRIBE      : 'device_subscribe {stream} {on}\r\n',
+    CmdID.DEV_PAUSE          : 'pause {on}\r\n'
 }
 
 
