@@ -4,13 +4,15 @@ import socket
 import sys
 import threading
 import time
+from typing import Union
 
-from protocol import CmdID, gen_command_string, parse_incoming_message
+from protocol import CmdID, gen_command_string, parse_incoming_message, \
+    ServerMessageType, StatusResponse, QueryReply
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
-class E4StreamingClient(threading.Thread):
+class BaseE4Client(threading.Thread):
     __delim = b'\n'
 
     def __init__(self, server_ip: str,
@@ -62,7 +64,7 @@ class E4StreamingClient(threading.Thread):
 
             # split up responses and process them
             while True:
-                raw_msg, lim, rest = data.partition(E4StreamingClient.__delim)
+                raw_msg, lim, rest = data.partition(BaseE4Client.__delim)
                 if len(lim) == len(rest) == 0:
                     # no remaining complete messages, read again from socket
                     break
@@ -73,12 +75,27 @@ class E4StreamingClient(threading.Thread):
                 message = raw_msg.decode('utf-8')
                 self.logger.debug(f'Raw incoming message: {message}')
 
-                parsed_msg = parse_incoming_message(message)
+                msg_type, parsed_msg = parse_incoming_message(message)
                 self.logger.debug(f'Parsed message: {parsed_msg}')
+
+                if msg_type == ServerMessageType.STREAM_DATA:
+                    self.sub_q.put(parsed_msg)
+                else:
+                    while True:
+                        try:
+                            self.resp_q.get_nowait()
+                        except queue.Empty:
+                            self.resp_q.put_nowait(parsed_msg)
+                            break
 
     def __send(self, cmd: str):
         self.logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
         self.socket.sendall(cmd.encode('utf-8'))
 
-    def send_command(self, cmd_id: CmdID, **kwargs):
+    def send_command(self, cmd_id: CmdID, **kwargs) \
+            -> Union[StatusResponse, QueryReply]:
         self.__send(gen_command_string(cmd_id, **kwargs))
+        resp = self.resp_q.get(block=True)
+
+        assert resp.command == cmd_id
+        return resp
