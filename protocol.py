@@ -34,7 +34,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, NamedTuple, Tuple, Type, Union
+from typing import Dict, NamedTuple, Tuple, Type, Union
 
 
 class NoSuchCommandError(Exception):
@@ -43,6 +43,28 @@ class NoSuchCommandError(Exception):
 
 class MissingArgumentError(Exception):
     pass
+
+
+class CmdID(Enum):
+    DEV_DISCOVER = 0
+    DEV_CONNECT_BTLE = 1
+    DEV_DISCONNECT_BTLE = 2
+    DEV_LIST = 3
+    DEV_CONNECT = 4
+    DEV_DISCONNECT = 5
+    DEV_SUBSCRIBE = 6
+    DEV_PAUSE = 7
+
+
+class DataStreamID(Enum):
+    ACC = 0
+    BVP = 1
+    GSR = 2
+    TEMP = 3
+    IBI = 4
+    HR = 5
+    BAT = 6
+    TAG = 7
 
 
 class CommandDefinition:
@@ -89,21 +111,13 @@ class CommandDefinition:
                '\r\n'
 
 
-class CmdID(Enum):
-    DEV_DISCOVER = 0
-    DEV_CONNECT_BTLE = 1
-    DEV_DISCONNECT_BTLE = 2
-    DEV_LIST = 3
-    DEV_CONNECT = 4
-    DEV_DISCONNECT = 5
-    DEV_SUBSCRIBE = 6
-    DEV_PAUSE = 7
+class DataStream(NamedTuple):
+    stream_id: DataStreamID
+    cmd_abbrv: str  # abbreviation used in commands (acc, bat, and so on)
+    resp_prefix: str  # prefix used by the server to identify streams
 
 
-# set up mappings for the commands
-_id_to_cmd = {}
-_str_to_cmd = {}
-
+# actually define commands:
 _cmd_defs = [
     CommandDefinition(CmdID.DEV_DISCOVER,
                       'device_discover_list', {},
@@ -131,32 +145,35 @@ _cmd_defs = [
                       is_query=False)
 ]
 
+# set up mappings for the commands
+_id_to_cmd = {}
+_str_to_cmd = {}
 for cmd_def in _cmd_defs:
     _id_to_cmd[cmd_def.cmd_id] = cmd_def
     _str_to_cmd[cmd_def.cmd_str] = cmd_def
 
+# define streams:
+_stream_defs = [
+    DataStream(DataStreamID.ACC, 'acc', 'E4_Acc'),
+    DataStream(DataStreamID.BVP, 'bvp', 'E4_Bvp'),
+    DataStream(DataStreamID.GSR, 'gsr', 'E4_Acc'),
+    DataStream(DataStreamID.TEMP, 'tmp', 'E4_Temp'),
+    # Interbeat interval and heartrate share the same command abbreviation,
+    # i.e., can't subscribe to one without the other
+    DataStream(DataStreamID.IBI, 'ibi', 'E4_Ibi'),
+    DataStream(DataStreamID.HR, 'ibi', 'E4_Hr'),
+    # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+    DataStream(DataStreamID.BAT, 'bat', 'E4_Battery'),
+    DataStream(DataStreamID.TAG, 'tag', 'E4_Tag')
+]
 
-class DataStream(Enum):
-    ACC = 0
-    BVP = 1
-    GSR = 2
-    TEMP = 3
-    IBI = 4
-    HR = 5
-    BAT = 6
-    TAG = 7
-
-
-_str_to_stream_id = {
-    'E4_Acc'    : DataStream.ACC,
-    'E4_Bvp'    : DataStream.BVP,
-    'E4_Gsr'    : DataStream.GSR,
-    'E4_Temp'   : DataStream.TEMP,
-    'E4_Ibi'    : DataStream.IBI,
-    'E4_Hr'     : DataStream.HR,
-    'E4_Battery': DataStream.BAT,
-    'E4_Tag'    : DataStream.TAG
-}
+_prefix_to_stream = {}
+_id_to_stream = {}
+_abbrv_to_stream = {}
+for stream in _stream_defs:
+    _prefix_to_stream[stream.resp_prefix] = stream
+    _id_to_stream[stream.stream_id] = stream
+    _abbrv_to_stream[stream.cmd_abbrv] = stream
 
 
 class ServerMessageType(Enum):
@@ -176,7 +193,7 @@ class StatusResponse(NamedTuple):
 
 
 class StreamingDataSample(NamedTuple):
-    stream: DataStream
+    stream: DataStreamID
     timestamp: float
     data: Tuple[float]
 
@@ -230,7 +247,7 @@ def parse_incoming_message(message: str) \
 
     elif msg_t.startswith('E4_'):
         # subscription data
-        sub_id = _str_to_stream_id[msg_t]
+        sub_id = _prefix_to_stream[msg_t].stream_id
         payload = message.split(' ')
         timestamp = float(payload[0])
         data = tuple(float(d) for d in payload[1:])
