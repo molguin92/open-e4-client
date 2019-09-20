@@ -34,15 +34,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, NamedTuple, Tuple, Type, Union
-
-
-class NoSuchCommandError(Exception):
-    pass
-
-
-class MissingArgumentError(Exception):
-    pass
+from typing import Dict, NamedTuple, Optional, Tuple, Type, Union
 
 
 class CmdID(Enum):
@@ -167,6 +159,7 @@ _stream_defs = [
     DataStream(DataStreamID.TAG, 'tag', 'E4_Tag')
 ]
 
+# easy lookup mappings for streams
 _prefix_to_stream = {}
 _id_to_stream = {}
 _abbrv_to_stream = {}
@@ -176,20 +169,16 @@ for stream in _stream_defs:
     _abbrv_to_stream[stream.cmd_abbrv] = stream
 
 
+# definitions for the replies:
 class ServerMessageType(Enum):
     STATUS_RESP = 0
-    STREAM_DATA = 1
-    QUERY_REPLY = 3
+    QUERY_REPLY = 1
+    STREAM_DATA = 2
 
 
 class CmdStatus(Enum):
     SUCCESS = 0
     ERROR = 1
-
-
-class StatusResponse(NamedTuple):
-    command: CmdID
-    status: CmdStatus
 
 
 class StreamingDataSample(NamedTuple):
@@ -198,9 +187,10 @@ class StreamingDataSample(NamedTuple):
     data: Tuple[float]
 
 
-class QueryReply(NamedTuple):
+class ServerReply(NamedTuple):
     command: CmdID
-    data: str
+    status: CmdStatus
+    data: Optional[str]
 
 
 def gen_command_string(cmd_id: CmdID, **kwargs) -> str:
@@ -208,9 +198,7 @@ def gen_command_string(cmd_id: CmdID, **kwargs) -> str:
 
 
 def parse_incoming_message(message: str) \
-        -> Tuple[ServerMessageType, Union[StatusResponse,
-                                          StreamingDataSample,
-                                          QueryReply]]:
+        -> Tuple[ServerMessageType, Union[ServerReply, StreamingDataSample]]:
     # split message on whitespace
     msg_t, _, message = message.partition(' ')
 
@@ -222,9 +210,10 @@ def parse_incoming_message(message: str) \
 
         if cmd.is_query:
             # response is a response to query, so it doesn't include OK/ERR
-            data = message
             return ServerMessageType.QUERY_REPLY, \
-                   QueryReply(cmd.cmd_id, data)
+                   ServerReply(command=cmd.cmd_id,
+                               status=CmdStatus.SUCCESS,
+                               data=message)
         else:
             # response is a status response
             # special handling for subscription responses as those include
@@ -236,14 +225,18 @@ def parse_incoming_message(message: str) \
                 # also special handling for Pause since it echoes back ON or
                 # OFF instead of OK/ERR ... Who designed this PoS API??
                 return ServerMessageType.STATUS_RESP, \
-                       StatusResponse(cmd.cmd_id, CmdStatus.SUCCESS)
+                       ServerReply(command=cmd.cmd_id,
+                                   status=CmdStatus.SUCCESS,
+                                   data=None)
 
             status_str, _, message = message.partition(' ')
             status = CmdStatus.SUCCESS \
                 if status_str == 'OK' else CmdStatus.ERROR
 
             return ServerMessageType.STATUS_RESP, \
-                   StatusResponse(cmd.cmd_id, status)
+                   ServerReply(command=cmd.cmd_id,
+                               status=status,
+                               data=None)
 
     elif msg_t.startswith('E4_'):
         # subscription data
