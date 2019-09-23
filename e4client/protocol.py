@@ -37,7 +37,7 @@ from enum import Enum
 from typing import Dict, NamedTuple, Optional, Tuple, Type, Union
 
 
-# Public definitions for streams
+# Public definitions for streams and device lists
 class DataStreamID(Enum):
     ACC = 0
     BVP = 1
@@ -53,6 +53,12 @@ class StreamingDataSample(NamedTuple):
     stream: DataStreamID
     timestamp: float
     data: Tuple[float]
+
+
+class E4Device(NamedTuple):
+    uid: str
+    name: str
+    allowed: bool
 
 
 # Rest of the stuff is private and for internal use only
@@ -255,3 +261,31 @@ def _parse_incoming_message(message: str) \
     else:
         # TODO?
         raise RuntimeError()
+
+
+def _parse_device_list(str_list: str) -> Tuple[E4Device]:
+    # device lists returned by the server have the following structure:
+    # <NUMBER_OF_DEVICES> | <DEVICE_INFO_1> | <DEVICE_INFO_2> | ...
+    # <DEVICE INFO> = <UID> <Name> <allowed or not (optional)>
+
+    elems = str_list.split('|')  # TODO: put delim as a constant somewhere?
+    elems = [e.strip() for e in elems]
+
+    n_devs = int(elems.pop(0))
+
+    # some sanity check
+    assert len(elems) == n_devs
+
+    devices = []
+    for e in elems:
+        dev_uid, _, e = e.partition(' ')
+        name, _, e = e.partition(' ')
+
+        if len(e) > 0:
+            allowed = (e == 'allowed')  # TODO: constant?
+        else:
+            allowed = True
+
+        devices.append(E4Device(dev_uid, name, allowed))
+
+    return tuple(devices)

@@ -4,9 +4,10 @@ import socket
 import sys
 import threading
 import time
+from typing import Tuple
 
-from e4client.protocol import _CmdID, _ServerMessageType, _ServerReply, \
-    _gen_command_string, \
+from e4client.protocol import E4Device, _CmdID, _ServerMessageType, \
+    _ServerReply, _gen_command_string, _parse_device_list, \
     _parse_incoming_message
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
@@ -99,3 +100,9 @@ class E4StreamingClient(threading.Thread):
 
         assert resp.command == cmd_id
         return resp
+
+    # public convenience methods follow:
+
+    def list_connected_devices(self) -> Tuple[E4Device]:
+        resp = self._send_command(_CmdID.DEV_LIST)
+        return _parse_device_list(resp.data)
