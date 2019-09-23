@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 from contextlib import AbstractContextManager
-from typing import Tuple, Union
+from typing import Dict, Tuple, Union
 
 from e4client.exceptions import BTLEConnectionError, DeviceNotFoundError, \
     ServerRequestError
@@ -19,18 +19,46 @@ logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
 class E4StreamingClient(AbstractContextManager):
+    """Empatica E4 streaming server full-duplex TCP client.
+
+    Implements a client for the Empatica E4 streaming server, providing
+    convenience methods for commands. Note that this object instantiates an
+    internal thread for full-duplex TCP communication.
+
+    Attributes:
+
+    subs_qs (Dict[str, queue.Queue]): dictionary object linking each unique
+    E4StreamID to a separate queue.Queue object for subscription management.
+
+    is_connected (bool): flag indicating whether the client is currently
+    connected to the server.
+
+    Can be used as a context manager.
+    """
+
     _delim = b'\n'
 
     def __init__(self, server_ip: str,
                  server_port: int,
                  max_conn_attempts: int = 20):
+        """
+        Instantiate a new E4StreamingClient. Note that the client will
+        immediately attempt to connect and spin up a separate thread to read
+        data from the server on instantiation.
+
+        :param server_ip: IP address of the Streaming Server.
+        :param server_port: TCP port of the Streaming Server.
+        :param max_conn_attempts: maximum number of connection attempts.
+
+        :raises OSError: in case of connection failure.
+        """
         super().__init__()
 
         self._logger = logging.getLogger(self.__class__.__name__)
 
         # set up buffers for responses and subscriptions
         self._resp_q = queue.Queue(maxsize=1)
-        self.sub_qs = {
+        self._sub_qs = {
             stream_id: queue.Queue() for stream_id in E4DataStreamID
         }
 
@@ -66,7 +94,18 @@ class E4StreamingClient(AbstractContextManager):
         self._recv_thread.start()
 
     @property
+    def sub_qs(self) -> Dict[E4DataStreamID, queue.Queue]:
+        """
+        Dictionary object linking each unique E4StreamID to a separate
+        queue.Queue object for subscription management.
+        """
+        return self._sub_qs
+
+    @property
     def is_connected(self) -> bool:
+        """
+        Flag indicating the connection status of the client.
+        """
         return self._connected
 
     def _recv_loop(self):
@@ -97,7 +136,7 @@ class E4StreamingClient(AbstractContextManager):
                     self._logger.debug(f'Parsed message: {parsed_msg}')
 
                     if msg_type == _ServerMessageType.STREAM_DATA:
-                        self.sub_qs[parsed_msg.stream].put(
+                        self._sub_qs[parsed_msg.stream].put(
                             (parsed_msg.timestamp, *parsed_msg.data))
                     else:
                         while True:
@@ -129,12 +168,24 @@ class E4StreamingClient(AbstractContextManager):
 
     # public convenience methods follow:
     def BTLE_discover_devices(self) -> Tuple[E4Device]:
+        """
+        Discover active, but not yet connected, E4 devices in the vicinity of
+        the streaming server.
+
+        :return: A tuple containing the discovered E4s.
+        """
         resp = self._send_command(_CmdID.DEV_DISCOVER)
         return _parse_device_list(resp.data)
 
     def BTLE_connect_device(self,
                             device: Union[E4Device, str],
                             timeout: int = 200) -> None:
+        """
+        Connect a previously discovered E4 to the Streaming Server.
+
+        :param device: Device to connect to.
+        :param timeout: Timeout before giving up on connection.
+        """
         device = device.uid if isinstance(device, E4Device) else device
         resp = self._send_command(_CmdID.DEV_CONNECT_BTLE,
                                   dev=device, timeout=timeout)
@@ -144,6 +195,11 @@ class E4StreamingClient(AbstractContextManager):
 
     def BTLE_disconnect_device(self,
                                device: Union[E4Device, str]) -> None:
+        """
+        Disconnect a connected E4 device from the Streaming Server.
+
+        :param device: The device to disconnect.
+        """
         device = device.uid if isinstance(device, E4Device) else device
         resp = self._send_command(_CmdID.DEV_DISCONNECT_BTLE, dev=device)
 
@@ -151,12 +207,31 @@ class E4StreamingClient(AbstractContextManager):
             raise BTLEConnectionError(device)
 
     def list_connected_devices(self) -> Tuple[E4Device]:
+        """
+        List the devices currently connected to the Streaming Server.
+
+        :return: A tuple containing the currently connected devices.
+        """
         resp = self._send_command(_CmdID.DEV_LIST)
         return _parse_device_list(resp.data)
 
     def connect_to_device(self,
                           device: Union[E4Device, str]) -> E4DeviceConnection:
+        """
+        Connect the client to a specific E4 for sensor data streaming.
+        Returns an E4DeviceConnection for interacting directly with the
+        specific device.
 
+        Note that E4DeviceConnection is a context manager, and this method is
+        intended to be used inside a 'with ... as' statement as follows:
+
+        with client.connect_to_device(...) as client_conn: ...
+
+        This ensures proper cleanup after finishing interacting with the device.
+
+        :param device: The device to connect to.
+        :return: An E4DeviceConnection context manager.
+        """
         device = device.uid if isinstance(device, E4Device) else device
         resp = self._send_command(_CmdID.DEV_CONNECT, dev=device)
 
@@ -166,11 +241,23 @@ class E4StreamingClient(AbstractContextManager):
             raise DeviceNotFoundError(device)
 
     def disconnect_from_device(self) -> None:
+        """
+        Disconnect from the currently connected E4 device.
+
+        Note: this method is automatically called by the corresponding
+        E4ConnectionDevice context manager if used with the 'with ... as'
+        statement.
+        """
         resp = self._send_command(_CmdID.DEV_DISCONNECT)
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
 
     def subscribe_to_stream(self, stream: E4DataStreamID) -> None:
+        """
+        Subscribes to the specified stream on the currently connected E4.
+
+        :param stream: Stream to subscribe to.
+        """
         resp = self._send_command(_CmdID.DEV_SUBSCRIBE,
                                   stream=stream, on=True)
 
@@ -178,13 +265,25 @@ class E4StreamingClient(AbstractContextManager):
             raise ServerRequestError(resp.data)
 
     def unsubscribe_from_stream(self, stream: E4DataStreamID) -> None:
+        """
+        Unsubscribes from the specified stream on the currently connected E4.
+
+        :param stream: Stream to unsubscribe from.
+        """
         resp = self._send_command(_CmdID.DEV_SUBSCRIBE,
                                   stream=stream, on=False)
 
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
 
-    def close(self):
+    def close(self) -> None:
+        """
+        Closes the connection to the server and shuts down the receiving
+        thread. Note that the client is left in an unusable state after this
+        and cannot be reconnected to the server.
+
+        Multiple calls to close() have no effect.
+        """
         if self._connected:
             self._socket.shutdown(socket.SHUT_RDWR)
             self._socket.close()
