@@ -5,7 +5,7 @@ import sys
 import threading
 import time
 
-from protocol import CmdID, ServerMessageType, ServerReply, \
+from e4client.protocol import CmdID, ServerMessageType, ServerReply, \
     gen_command_string, \
     parse_incoming_message
 
