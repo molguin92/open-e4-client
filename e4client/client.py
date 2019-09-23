@@ -32,49 +32,49 @@ class E4StreamingClient(threading.Thread):
                  max_conn_attempts: int = 20):
         super().__init__()
 
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
         # set up buffers for responses and subscriptions
-        self.resp_q = queue.Queue(maxsize=1)
+        self._resp_q = queue.Queue(maxsize=1)
         self.sub_qs = {
             stream_id: queue.Queue() for stream_id in DataStreamID
         }
 
-        self.logger.info(f'Connecting to {server_ip}:{server_port}...')
+        self._logger.info(f'Connecting to {server_ip}:{server_port}...')
 
         # immediately try to connect
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         attempts = 0
         while True:
             try:
-                self.logger.info(f'Connection attempt {attempts + 1}.')
-                self.socket.connect((server_ip, server_port))
-                self.logger.info('Connection success.')
+                self._logger.info(f'Connection attempt {attempts + 1}.')
+                self._socket.connect((server_ip, server_port))
+                self._logger.info('Connection success.')
                 break
             except OSError:
-                self.logger.info('Connection failed.')
+                self._logger.info('Connection failed.')
                 if attempts < max_conn_attempts:
-                    self.logger.info('Reattempting connection...')
+                    self._logger.info('Reattempting connection...')
                     attempts += 1
                     time.sleep(0.01)
                     continue
                 else:
-                    self.logger.error('Too many connection attempts!')
-                    self.socket.close()
+                    self._logger.error('Too many connection attempts!')
+                    self._socket.close()
                     raise
 
-        self.recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
-        self.recv_thread.start()
+        self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self._recv_thread.start()
 
     def _recv_loop(self):
-        self.logger.debug('Starting receiving thread...')
+        self._logger.debug('Starting receiving thread...')
 
         data = b''
         while True:
             # small block size since messages are short
-            data += self.socket.recv(64)
+            data += self._socket.recv(64)
 
             # split up responses and process them
             while True:
@@ -87,10 +87,10 @@ class E4StreamingClient(threading.Thread):
 
                 # parse the first extracted response
                 message = raw_msg.decode('utf-8')
-                self.logger.debug(f'Raw incoming message: {message}')
+                self._logger.debug(f'Raw incoming message: {message}')
 
                 msg_type, parsed_msg = _parse_incoming_message(message)
-                self.logger.debug(f'Parsed message: {parsed_msg}')
+                self._logger.debug(f'Parsed message: {parsed_msg}')
 
                 if msg_type == _ServerMessageType.STREAM_DATA:
                     self.sub_qs[parsed_msg.stream].put(
@@ -98,19 +98,19 @@ class E4StreamingClient(threading.Thread):
                 else:
                     while True:
                         try:
-                            self.resp_q.get_nowait()
+                            self._resp_q.get_nowait()
                         except queue.Empty:
-                            self.resp_q.put_nowait(parsed_msg)
+                            self._resp_q.put_nowait(parsed_msg)
                             break
 
     def _send(self, cmd: str):
-        self.logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
-        self.socket.sendall(cmd.encode('utf-8'))
+        self._logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
+        self._socket.sendall(cmd.encode('utf-8'))
 
     def _send_command(self, cmd_id: _CmdID, **kwargs) \
             -> _ServerReply:
         self._send(_gen_command_string(cmd_id, **kwargs))
-        resp = self.resp_q.get(block=True)
+        resp = self._resp_q.get(block=True)
 
         assert resp.command == cmd_id
         return resp
