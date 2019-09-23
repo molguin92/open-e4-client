@@ -1,7 +1,7 @@
 import setuptools
 
 pkg_name = 'open-e4-client'
-version = '0.0.3beta1'
+version = '0.0.3beta2'
 
 setuptools.setup(
     name=pkg_name,
