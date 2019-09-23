@@ -4,10 +4,10 @@ import socket
 import sys
 import threading
 import time
-from typing import Union
 
-from protocol import CmdID, gen_command_string, parse_incoming_message, \
-    ServerMessageType, StatusResponse, QueryReply
+from protocol import CmdID, ServerMessageType, ServerReply, \
+    gen_command_string, \
+    parse_incoming_message
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
@@ -93,7 +93,7 @@ class BaseE4Client(threading.Thread):
         self.socket.sendall(cmd.encode('utf-8'))
 
     def send_command(self, cmd_id: CmdID, **kwargs) \
-            -> Union[StatusResponse, QueryReply]:
+            -> ServerReply:
         self.__send(gen_command_string(cmd_id, **kwargs))
         resp = self.resp_q.get(block=True)
 
