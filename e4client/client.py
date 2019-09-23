@@ -30,7 +30,7 @@ class E4StreamingClient(AbstractContextManager):
     def __init__(self, server_ip: str,
                  server_port: int,
                  max_conn_attempts: int = 20):
-        super().__init__(self)
+        super().__init__()
 
         self._logger = logging.getLogger(self.__class__.__name__)
 

@@ -167,7 +167,7 @@ for cmd_def in _cmd_defs:
 _stream_defs = [
     _DataStream(DataStreamID.ACC, 'acc', 'E4_Acc'),
     _DataStream(DataStreamID.BVP, 'bvp', 'E4_Bvp'),
-    _DataStream(DataStreamID.GSR, 'gsr', 'E4_Acc'),
+    _DataStream(DataStreamID.GSR, 'gsr', 'E4_Gsr'),
     _DataStream(DataStreamID.TEMP, 'tmp', 'E4_Temp'),
     # Interbeat interval and heartrate share the same command abbreviation,
     # i.e., can't subscribe to one without the other
@@ -181,11 +181,9 @@ _stream_defs = [
 # easy lookup mappings for streams
 _prefix_to_stream = {}
 _id_to_stream = {}
-_abbrv_to_stream = {}
 for stream in _stream_defs:
     _prefix_to_stream[stream.resp_prefix] = stream
     _id_to_stream[stream.stream_id] = stream
-    _abbrv_to_stream[stream.cmd_abbrv] = stream
 
 
 # definitions for the replies:
