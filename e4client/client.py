@@ -12,7 +12,7 @@ from e4client.protocol import _CmdID, _ServerMessageType, _ServerReply, \
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
-class _BaseE4Client(threading.Thread):
+class E4StreamingClient(threading.Thread):
     _delim = b'\n'
 
     def __init__(self, server_ip: str,
@@ -64,7 +64,7 @@ class _BaseE4Client(threading.Thread):
 
             # split up responses and process them
             while True:
-                raw_msg, lim, rest = data.partition(_BaseE4Client._delim)
+                raw_msg, lim, rest = data.partition(E4StreamingClient._delim)
                 if len(lim) == len(rest) == 0:
                     # no remaining complete messages, read again from socket
                     break
