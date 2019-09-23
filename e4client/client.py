@@ -9,9 +9,8 @@ import time
 from contextlib import AbstractContextManager
 from typing import Tuple, Union
 
-from e4client.protocol import E4Device, _CmdID, _CmdStatus, \
-    _ServerMessageType, \
-    _ServerReply, _gen_command_string, _parse_device_list, \
+from e4client.protocol import DataStreamID, E4Device, _CmdID, _CmdStatus, \
+    _ServerMessageType, _ServerReply, _gen_command_string, _parse_device_list, \
     _parse_incoming_message
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
@@ -37,7 +36,9 @@ class E4StreamingClient(threading.Thread):
 
         # set up buffers for responses and subscriptions
         self.resp_q = queue.Queue(maxsize=1)
-        self.sub_q = queue.Queue()
+        self.sub_qs = {
+            stream_id: queue.Queue() for stream_id in DataStreamID
+        }
 
         self.logger.info(f'Connecting to {server_ip}:{server_port}...')
 
@@ -92,7 +93,7 @@ class E4StreamingClient(threading.Thread):
                 self.logger.debug(f'Parsed message: {parsed_msg}')
 
                 if msg_type == _ServerMessageType.STREAM_DATA:
-                    self.sub_q.put(parsed_msg)
+                    self.sub_qs[parsed_msg.stream].put(parsed_msg.data)
                 else:
                     while True:
                         try:
@@ -135,6 +136,20 @@ class E4StreamingClient(threading.Thread):
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
 
+    def subscribe_to_stream(self, stream: DataStreamID) -> None:
+        resp = self._send_command(_CmdID.DEV_SUBSCRIBE,
+                                  stream=stream, on=True)
+
+        if resp.status != _CmdStatus.SUCCESS:
+            raise ServerRequestError(resp.data)
+
+    def unsubscribe_from_stream(self, stream: DataStreamID) -> None:
+        resp = self._send_command(_CmdID.DEV_SUBSCRIBE,
+                                  stream=stream, on=False)
+
+        if resp.status != _CmdStatus.SUCCESS:
+            raise ServerRequestError(resp.data)
+
 
 class DeviceConnection(AbstractContextManager):
     def __init__(self,
@@ -153,3 +168,6 @@ class DeviceConnection(AbstractContextManager):
     @property
     def uid(self):
         return self._dev
+
+    def subscribe_to_stream(self):
+        pass
