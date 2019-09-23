@@ -9,23 +9,13 @@ import time
 from contextlib import AbstractContextManager
 from typing import Tuple, Union
 
+from e4client.exceptions import BTLEConnectionError, DeviceNotFoundError, \
+    ServerRequestError
 from e4client.protocol import E4DataStreamID, E4Device, _CmdID, _CmdStatus, \
     _ServerMessageType, _ServerReply, _gen_command_string, _parse_device_list, \
     _parse_incoming_message
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
-
-
-class DeviceNotFoundError(Exception):
-    pass
-
-
-class ServerRequestError(Exception):
-    pass
-
-
-class BTLEConnectionError(Exception):
-    pass
 
 
 class E4StreamingClient(AbstractContextManager):
