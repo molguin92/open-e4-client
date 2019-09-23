@@ -1,3 +1,5 @@
+[![PyPI version](https://badge.fury.io/py/open-e4-client.svg)](https://badge.fury.io/py/open-e4-client)
+
 # open-e4-client
 
 Pure Python 3.7+ client for the [Empatica E4](https://www.empatica.com/research/e4/) realtime [streaming server.](http://developer.empatica.com/windows-streaming-server.html) 
