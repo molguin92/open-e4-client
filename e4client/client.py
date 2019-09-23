@@ -24,6 +24,10 @@ class ServerRequestError(Exception):
     pass
 
 
+class BTLEConnectionError(Exception):
+    pass
+
+
 class E4StreamingClient(AbstractContextManager):
     _delim = b'\n'
 
@@ -134,6 +138,27 @@ class E4StreamingClient(AbstractContextManager):
         self.close()
 
     # public convenience methods follow:
+    def BTLE_discover_devices(self) -> Tuple[E4Device]:
+        resp = self._send_command(_CmdID.DEV_DISCOVER)
+        return _parse_device_list(resp.data)
+
+    def BTLE_connect_device(self,
+                            device: Union[E4Device, str],
+                            timeout: int = 200) -> None:
+        device = device.uid if isinstance(device, E4Device) else device
+        resp = self._send_command(_CmdID.DEV_CONNECT_BTLE,
+                                  dev=device, timeout=timeout)
+
+        if resp.status != _CmdStatus.SUCCESS:
+            raise BTLEConnectionError(device)
+
+    def BTLE_disconnect_device(self,
+                               device: Union[E4Device, str]) -> None:
+        device = device.uid if isinstance(device, E4Device) else device
+        resp = self._send_command(_CmdID.DEV_DISCONNECT_BTLE, dev=device)
+
+        if resp.status != _CmdStatus.SUCCESS:
+            raise BTLEConnectionError(device)
 
     def list_connected_devices(self) -> Tuple[E4Device]:
         resp = self._send_command(_CmdID.DEV_LIST)
