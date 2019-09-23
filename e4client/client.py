@@ -94,7 +94,7 @@ class E4StreamingClient(AbstractContextManager):
         self._recv_thread.start()
 
     @property
-    def sub_qs(self) -> Dict[E4DataStreamID, queue.Queue]:
+    def sub_qs(self) -> Dict[E4DataStreamID, 'queue.Queue[Tuple]']:
         """
         Dictionary object linking each unique E4StreamID to a separate
         queue.Queue object for subscription management. Each queue contains
@@ -327,7 +327,8 @@ class E4DeviceConnection(AbstractContextManager):
         """
         return self._dev
 
-    def subscribe_to_stream(self, stream: E4DataStreamID) -> queue.Queue:
+    def subscribe_to_stream(self, stream: E4DataStreamID) \
+            -> 'queue.Queue[Tuple]':
         """
         Subscribes to the specified stream on the currently connected E4 device.
         Returns a queue.Queue object in which the received samples will be
