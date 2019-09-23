@@ -65,7 +65,8 @@ class E4StreamingClient(threading.Thread):
                     self._socket.close()
                     raise
 
-        self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self._recv_thread = threading.Thread(target=self._recv_loop,
+                                             daemon=True)
         self._recv_thread.start()
 
     def _recv_loop(self):
@@ -160,6 +161,8 @@ class DeviceConnection(AbstractContextManager):
         self._dev = dev_uid
         self._subscriptions = set()
 
+        self._logger = logging.getLogger(self.__class__.__name__)
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.disconnect()
 
@@ -168,15 +171,18 @@ class DeviceConnection(AbstractContextManager):
         return self._dev
 
     def subscribe_to_stream(self, stream: DataStreamID) -> queue.Queue:
+        self._logger.debug(f'Subscribing to {stream}.')
         self._client.subscribe_to_stream(stream)
         self._subscriptions.add(stream)
         return self._client.sub_qs[stream]
 
     def unsubscribe_from_stream(self, stream: DataStreamID) -> None:
+        self._logger.debug(f'Unsubscribing from {stream}.')
         self._client.unsubscribe_from_stream(stream)
         self._subscriptions.remove(stream)
 
     def disconnect(self):
+        self._logger.debug(f'Disconnecting device {self._dev}.')
         for sub in self._subscriptions:
             self._client.unsubscribe_from_stream(sub)
 
