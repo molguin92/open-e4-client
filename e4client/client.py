@@ -93,7 +93,8 @@ class E4StreamingClient(threading.Thread):
                 self.logger.debug(f'Parsed message: {parsed_msg}')
 
                 if msg_type == _ServerMessageType.STREAM_DATA:
-                    self.sub_qs[parsed_msg.stream].put(parsed_msg.data)
+                    self.sub_qs[parsed_msg.stream].put(
+                        (parsed_msg.timestamp, *parsed_msg.data))
                 else:
                     while True:
                         try:
@@ -157,17 +158,26 @@ class DeviceConnection(AbstractContextManager):
                  dev_uid: str):
         self._client = client
         self._dev = dev_uid
+        self._subscriptions = set()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.client.disconnect_from_device()
+        self.disconnect()
 
     @property
-    def client(self):
-        return self._client
-
-    @property
-    def uid(self):
+    def uid(self) -> str:
         return self._dev
 
-    def subscribe_to_stream(self):
-        pass
+    def subscribe_to_stream(self, stream: DataStreamID) -> queue.Queue:
+        self._client.subscribe_to_stream(stream)
+        self._subscriptions.add(stream)
+        return self._client.sub_qs[stream]
+
+    def unsubscribe_from_stream(self, stream: DataStreamID) -> None:
+        self._client.unsubscribe_from_stream(stream)
+        self._subscriptions.remove(stream)
+
+    def disconnect(self):
+        for sub in self._subscriptions:
+            self._client.unsubscribe_from_stream(sub)
+
+        self._client.disconnect_from_device()
