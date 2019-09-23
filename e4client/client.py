@@ -1,16 +1,28 @@
+from __future__ import annotations
+
 import logging
 import queue
 import socket
 import sys
 import threading
 import time
-from typing import Tuple
+from contextlib import AbstractContextManager
+from typing import Tuple, Union
 
-from e4client.protocol import E4Device, _CmdID, _ServerMessageType, \
+from e4client.protocol import E4Device, _CmdID, _CmdStatus, \
+    _ServerMessageType, \
     _ServerReply, _gen_command_string, _parse_device_list, \
     _parse_incoming_message
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+
+
+class DeviceNotFoundError(Exception):
+    pass
+
+
+class ServerRequestError(Exception):
+    pass
 
 
 class E4StreamingClient(threading.Thread):
@@ -106,3 +118,38 @@ class E4StreamingClient(threading.Thread):
     def list_connected_devices(self) -> Tuple[E4Device]:
         resp = self._send_command(_CmdID.DEV_LIST)
         return _parse_device_list(resp.data)
+
+    def connect_to_device(self,
+                          device: Union[E4Device, str]) -> DeviceConnection:
+
+        device = device.uid if isinstance(device, E4Device) else device
+        resp = self._send_command(_CmdID.DEV_CONNECT, dev=device)
+
+        if resp.status == _CmdStatus.SUCCESS:
+            return DeviceConnection(client=self, dev_uid=device)
+        else:
+            raise DeviceNotFoundError(device)
+
+    def disconnect_from_device(self) -> None:
+        resp = self._send_command(_CmdID.DEV_DISCONNECT)
+        if resp.status != _CmdStatus.SUCCESS:
+            raise ServerRequestError(resp.data)
+
+
+class DeviceConnection(AbstractContextManager):
+    def __init__(self,
+                 client: E4StreamingClient,
+                 dev_uid: str):
+        self._client = client
+        self._dev = dev_uid
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.client.disconnect_from_device()
+
+    @property
+    def client(self):
+        return self._client
+
+    @property
+    def uid(self):
+        return self._dev
