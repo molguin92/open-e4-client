@@ -49,12 +49,6 @@ class E4DataStreamID(Enum):
     TAG = 7
 
 
-class E4StreamingDataSample(NamedTuple):
-    stream: E4DataStreamID
-    timestamp: float
-    data: Tuple[float]
-
-
 class E4Device(NamedTuple):
     uid: str
     name: str
@@ -73,6 +67,12 @@ class _CmdID(Enum):
     DEV_DISCONNECT = 5
     DEV_SUBSCRIBE = 6
     DEV_PAUSE = 7
+
+
+class _E4StreamingDataSample(NamedTuple):
+    stream: E4DataStreamID
+    timestamp: float
+    data: Tuple[float]
 
 
 class _CommandDefinition:
@@ -210,7 +210,7 @@ def _gen_command_string(cmd_id: _CmdID, **kwargs) -> str:
 
 def _parse_incoming_message(message: str) \
         -> Tuple[
-            _ServerMessageType, Union[_ServerReply, E4StreamingDataSample]]:
+            _ServerMessageType, Union[_ServerReply, _E4StreamingDataSample]]:
     # split message on whitespace
     msg_t, _, message = message.partition(' ')
 
@@ -258,7 +258,7 @@ def _parse_incoming_message(message: str) \
         data = tuple(float(d) for d in payload[1:])
 
         return _ServerMessageType.STREAM_DATA, \
-               E4StreamingDataSample(sub_id, timestamp, data)
+               _E4StreamingDataSample(sub_id, timestamp, data)
 
     else:
         # TODO?

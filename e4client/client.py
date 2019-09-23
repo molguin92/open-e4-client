@@ -97,7 +97,8 @@ class E4StreamingClient(AbstractContextManager):
     def sub_qs(self) -> Dict[E4DataStreamID, queue.Queue]:
         """
         Dictionary object linking each unique E4StreamID to a separate
-        queue.Queue object for subscription management.
+        queue.Queue object for subscription management. Each queue contains
+        tuples of the form (timestamp, datum_0, datum_1, ..., datum_n).
         """
         return self._sub_qs
 
@@ -330,7 +331,8 @@ class E4DeviceConnection(AbstractContextManager):
         """
         Subscribes to the specified stream on the currently connected E4 device.
         Returns a queue.Queue object in which the received samples will be
-        deposited by the receiving thread on the client.
+        deposited by the receiving thread on the client. The queue returns
+        tuples of the form (timestamp, datum_0, datum_1, ..., datum_n).
 
         :param stream: stream to subscribe to.
         :return: queue.Queue in which the samples will be deposited.
