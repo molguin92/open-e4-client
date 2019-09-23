@@ -38,7 +38,7 @@ from typing import Dict, NamedTuple, Optional, Tuple, Type, Union
 
 
 # Public definitions for streams and device lists
-class DataStreamID(Enum):
+class E4DataStreamID(Enum):
     ACC = 0
     BVP = 1
     GSR = 2
@@ -49,8 +49,8 @@ class DataStreamID(Enum):
     TAG = 7
 
 
-class StreamingDataSample(NamedTuple):
-    stream: DataStreamID
+class E4StreamingDataSample(NamedTuple):
+    stream: E4DataStreamID
     timestamp: float
     data: Tuple[float]
 
@@ -112,7 +112,7 @@ class _CommandDefinition:
             # turn booleans into on/off and stream ids into strings
             if type(val) == bool:
                 kwargs[kwarg] = 'ON' if val else 'OFF'
-            elif type(val) == DataStreamID:
+            elif type(val) == E4DataStreamID:
                 kwargs[kwarg] = _id_to_stream[val].cmd_abbrv
 
         # generate the actual string
@@ -122,7 +122,7 @@ class _CommandDefinition:
 
 
 class _DataStream(NamedTuple):
-    stream_id: DataStreamID
+    stream_id: E4DataStreamID
     cmd_abbrv: str  # abbreviation used in commands (acc, bat, and so on)
     resp_prefix: str  # prefix used by the server to identify streams
 
@@ -149,7 +149,7 @@ _cmd_defs = [
                        is_query=False),
     _CommandDefinition(_CmdID.DEV_SUBSCRIBE,
                        'device_subscribe',
-                       {'stream': DataStreamID, 'on': bool},
+                       {'stream': E4DataStreamID, 'on': bool},
                        is_query=False),
     _CommandDefinition(_CmdID.DEV_PAUSE,
                        'pause', {'on': bool},
@@ -165,17 +165,17 @@ for cmd_def in _cmd_defs:
 
 # define streams:
 _stream_defs = [
-    _DataStream(DataStreamID.ACC, 'acc', 'E4_Acc'),
-    _DataStream(DataStreamID.BVP, 'bvp', 'E4_Bvp'),
-    _DataStream(DataStreamID.GSR, 'gsr', 'E4_Gsr'),
-    _DataStream(DataStreamID.TEMP, 'tmp', 'E4_Temp'),
+    _DataStream(E4DataStreamID.ACC, 'acc', 'E4_Acc'),
+    _DataStream(E4DataStreamID.BVP, 'bvp', 'E4_Bvp'),
+    _DataStream(E4DataStreamID.GSR, 'gsr', 'E4_Gsr'),
+    _DataStream(E4DataStreamID.TEMP, 'tmp', 'E4_Temp'),
     # Interbeat interval and heartrate share the same command abbreviation,
     # i.e., can't subscribe to one without the other
-    _DataStream(DataStreamID.IBI, 'ibi', 'E4_Ibi'),
-    _DataStream(DataStreamID.HR, 'ibi', 'E4_Hr'),
+    _DataStream(E4DataStreamID.IBI, 'ibi', 'E4_Ibi'),
+    _DataStream(E4DataStreamID.HR, 'ibi', 'E4_Hr'),
     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-    _DataStream(DataStreamID.BAT, 'bat', 'E4_Battery'),
-    _DataStream(DataStreamID.TAG, 'tag', 'E4_Tag')
+    _DataStream(E4DataStreamID.BAT, 'bat', 'E4_Battery'),
+    _DataStream(E4DataStreamID.TAG, 'tag', 'E4_Tag')
 ]
 
 # easy lookup mappings for streams
@@ -209,7 +209,8 @@ def _gen_command_string(cmd_id: _CmdID, **kwargs) -> str:
 
 
 def _parse_incoming_message(message: str) \
-        -> Tuple[_ServerMessageType, Union[_ServerReply, StreamingDataSample]]:
+        -> Tuple[
+            _ServerMessageType, Union[_ServerReply, E4StreamingDataSample]]:
     # split message on whitespace
     msg_t, _, message = message.partition(' ')
 
@@ -257,7 +258,7 @@ def _parse_incoming_message(message: str) \
         data = tuple(float(d) for d in payload[1:])
 
         return _ServerMessageType.STREAM_DATA, \
-               StreamingDataSample(sub_id, timestamp, data)
+               E4StreamingDataSample(sub_id, timestamp, data)
 
     else:
         # TODO?

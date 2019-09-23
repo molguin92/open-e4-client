@@ -9,7 +9,7 @@ import time
 from contextlib import AbstractContextManager
 from typing import Tuple, Union
 
-from e4client.protocol import DataStreamID, E4Device, _CmdID, _CmdStatus, \
+from e4client.protocol import E4DataStreamID, E4Device, _CmdID, _CmdStatus, \
     _ServerMessageType, _ServerReply, _gen_command_string, _parse_device_list, \
     _parse_incoming_message
 
@@ -37,7 +37,7 @@ class E4StreamingClient(AbstractContextManager):
         # set up buffers for responses and subscriptions
         self._resp_q = queue.Queue(maxsize=1)
         self.sub_qs = {
-            stream_id: queue.Queue() for stream_id in DataStreamID
+            stream_id: queue.Queue() for stream_id in E4DataStreamID
         }
 
         self._logger.info(f'Connecting to {server_ip}:{server_port}...')
@@ -140,13 +140,13 @@ class E4StreamingClient(AbstractContextManager):
         return _parse_device_list(resp.data)
 
     def connect_to_device(self,
-                          device: Union[E4Device, str]) -> DeviceConnection:
+                          device: Union[E4Device, str]) -> E4DeviceConnection:
 
         device = device.uid if isinstance(device, E4Device) else device
         resp = self._send_command(_CmdID.DEV_CONNECT, dev=device)
 
         if resp.status == _CmdStatus.SUCCESS:
-            return DeviceConnection(client=self, dev_uid=device)
+            return E4DeviceConnection(client=self, dev_uid=device)
         else:
             raise DeviceNotFoundError(device)
 
@@ -155,14 +155,14 @@ class E4StreamingClient(AbstractContextManager):
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
 
-    def subscribe_to_stream(self, stream: DataStreamID) -> None:
+    def subscribe_to_stream(self, stream: E4DataStreamID) -> None:
         resp = self._send_command(_CmdID.DEV_SUBSCRIBE,
                                   stream=stream, on=True)
 
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
 
-    def unsubscribe_from_stream(self, stream: DataStreamID) -> None:
+    def unsubscribe_from_stream(self, stream: E4DataStreamID) -> None:
         resp = self._send_command(_CmdID.DEV_SUBSCRIBE,
                                   stream=stream, on=False)
 
@@ -177,7 +177,7 @@ class E4StreamingClient(AbstractContextManager):
             self._connected = False
 
 
-class DeviceConnection(AbstractContextManager):
+class E4DeviceConnection(AbstractContextManager):
     def __init__(self,
                  client: E4StreamingClient,
                  dev_uid: str):
@@ -194,13 +194,13 @@ class DeviceConnection(AbstractContextManager):
     def uid(self) -> str:
         return self._dev
 
-    def subscribe_to_stream(self, stream: DataStreamID) -> queue.Queue:
+    def subscribe_to_stream(self, stream: E4DataStreamID) -> queue.Queue:
         self._logger.debug(f'Subscribing to {stream}.')
         self._client.subscribe_to_stream(stream)
         self._subscriptions.add(stream)
         return self._client.sub_qs[stream]
 
-    def unsubscribe_from_stream(self, stream: DataStreamID) -> None:
+    def unsubscribe_from_stream(self, stream: E4DataStreamID) -> None:
         self._logger.debug(f'Unsubscribing from {stream}.')
         self._client.unsubscribe_from_stream(stream)
         self._subscriptions.remove(stream)
