@@ -12,8 +12,8 @@ from e4client.protocol import CmdID, ServerMessageType, ServerReply, \
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 
-class BaseE4Client(threading.Thread):
-    __delim = b'\n'
+class _BaseE4Client(threading.Thread):
+    _delim = b'\n'
 
     def __init__(self, server_ip: str,
                  server_port: int,
@@ -51,10 +51,10 @@ class BaseE4Client(threading.Thread):
                     self.socket.close()
                     raise
 
-        self.recv_thread = threading.Thread(target=self.__recv, daemon=True)
+        self.recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
         self.recv_thread.start()
 
-    def __recv(self):
+    def _recv_loop(self):
         self.logger.debug('Starting receiving thread...')
 
         data = b''
@@ -64,7 +64,7 @@ class BaseE4Client(threading.Thread):
 
             # split up responses and process them
             while True:
-                raw_msg, lim, rest = data.partition(BaseE4Client.__delim)
+                raw_msg, lim, rest = data.partition(_BaseE4Client._delim)
                 if len(lim) == len(rest) == 0:
                     # no remaining complete messages, read again from socket
                     break
@@ -88,13 +88,13 @@ class BaseE4Client(threading.Thread):
                             self.resp_q.put_nowait(parsed_msg)
                             break
 
-    def __send(self, cmd: str):
+    def _send(self, cmd: str):
         self.logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
         self.socket.sendall(cmd.encode('utf-8'))
 
-    def send_command(self, cmd_id: CmdID, **kwargs) \
+    def _send_command(self, cmd_id: CmdID, **kwargs) \
             -> ServerReply:
-        self.__send(gen_command_string(cmd_id, **kwargs))
+        self._send(gen_command_string(cmd_id, **kwargs))
         resp = self.resp_q.get(block=True)
 
         assert resp.command == cmd_id
