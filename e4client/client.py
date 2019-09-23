@@ -292,9 +292,24 @@ class E4StreamingClient(AbstractContextManager):
 
 
 class E4DeviceConnection(AbstractContextManager):
+    """Context manager for device connections.
+
+    Provides a simple interface to manage single device connections and
+    subscriptions. Implemented as a context manager to automatize the
+    clearing of subscriptions and disconnecting.
+    """
+
     def __init__(self,
                  client: E4StreamingClient,
                  dev_uid: str):
+        """
+        Instantiates a new device connection. Not intended for external use,
+        and should only be called by the E4StreamingClient.connect_to_device()
+        method.
+
+        :param client: underlying E4StreamingClient
+        :param dev_uid: device currently connected to the streaming server.
+        """
         self._client = client
         self._dev = dev_uid
         self._subscriptions = set()
@@ -306,20 +321,43 @@ class E4DeviceConnection(AbstractContextManager):
 
     @property
     def uid(self) -> str:
+        """
+        Unique ID of the currently connected device.
+        """
         return self._dev
 
     def subscribe_to_stream(self, stream: E4DataStreamID) -> queue.Queue:
+        """
+        Subscribes to the specified stream on the currently connected E4 device.
+        Returns a queue.Queue object in which the received samples will be
+        deposited by the receiving thread on the client.
+
+        :param stream: stream to subscribe to.
+        :return: queue.Queue in which the samples will be deposited.
+        """
         self._logger.debug(f'Subscribing to {stream}.')
         self._client.subscribe_to_stream(stream)
         self._subscriptions.add(stream)
         return self._client.sub_qs[stream]
 
     def unsubscribe_from_stream(self, stream: E4DataStreamID) -> None:
+        """
+        Unsubscribes from a pre-established subscription.
+
+        :param stream: Stream to unsubscribe from.
+        """
         self._logger.debug(f'Unsubscribing from {stream}.')
         self._client.unsubscribe_from_stream(stream)
         self._subscriptions.remove(stream)
 
-    def disconnect(self):
+    def disconnect(self) -> None:
+        """
+        Disconnects from the current device.
+
+        Note: should not be called directly, as it will automatically be
+        called when exiting the current context if E4DeviceConnection is used
+        as a context manager.
+        """
         self._logger.debug(f'Disconnecting device {self._dev}.')
         for sub in self._subscriptions:
             self._client.unsubscribe_from_stream(sub)
