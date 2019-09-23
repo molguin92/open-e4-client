@@ -5,9 +5,9 @@ import sys
 import threading
 import time
 
-from e4client.protocol import CmdID, ServerMessageType, ServerReply, \
-    gen_command_string, \
-    parse_incoming_message
+from e4client.protocol import _CmdID, _ServerMessageType, _ServerReply, \
+    _gen_command_string, \
+    _parse_incoming_message
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
@@ -75,10 +75,10 @@ class _BaseE4Client(threading.Thread):
                 message = raw_msg.decode('utf-8')
                 self.logger.debug(f'Raw incoming message: {message}')
 
-                msg_type, parsed_msg = parse_incoming_message(message)
+                msg_type, parsed_msg = _parse_incoming_message(message)
                 self.logger.debug(f'Parsed message: {parsed_msg}')
 
-                if msg_type == ServerMessageType.STREAM_DATA:
+                if msg_type == _ServerMessageType.STREAM_DATA:
                     self.sub_q.put(parsed_msg)
                 else:
                     while True:
@@ -92,9 +92,9 @@ class _BaseE4Client(threading.Thread):
         self.logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
         self.socket.sendall(cmd.encode('utf-8'))
 
-    def _send_command(self, cmd_id: CmdID, **kwargs) \
-            -> ServerReply:
-        self._send(gen_command_string(cmd_id, **kwargs))
+    def _send_command(self, cmd_id: _CmdID, **kwargs) \
+            -> _ServerReply:
+        self._send(_gen_command_string(cmd_id, **kwargs))
         resp = self.resp_q.get(block=True)
 
         assert resp.command == cmd_id

@@ -37,17 +37,7 @@ from enum import Enum
 from typing import Dict, NamedTuple, Optional, Tuple, Type, Union
 
 
-class CmdID(Enum):
-    DEV_DISCOVER = 0
-    DEV_CONNECT_BTLE = 1
-    DEV_DISCONNECT_BTLE = 2
-    DEV_LIST = 3
-    DEV_CONNECT = 4
-    DEV_DISCONNECT = 5
-    DEV_SUBSCRIBE = 6
-    DEV_PAUSE = 7
-
-
+# Public definitions for streams
 class DataStreamID(Enum):
     ACC = 0
     BVP = 1
@@ -59,8 +49,28 @@ class DataStreamID(Enum):
     TAG = 7
 
 
-class CommandDefinition:
-    def __init__(self, cmd_id: CmdID,
+class StreamingDataSample(NamedTuple):
+    stream: DataStreamID
+    timestamp: float
+    data: Tuple[float]
+
+
+# Rest of the stuff is private and for internal use only
+
+
+class _CmdID(Enum):
+    DEV_DISCOVER = 0
+    DEV_CONNECT_BTLE = 1
+    DEV_DISCONNECT_BTLE = 2
+    DEV_LIST = 3
+    DEV_CONNECT = 4
+    DEV_DISCONNECT = 5
+    DEV_SUBSCRIBE = 6
+    DEV_PAUSE = 7
+
+
+class _CommandDefinition:
+    def __init__(self, cmd_id: _CmdID,
                  cmd: str,
                  args: Dict[str, Type],
                  is_query: bool = False):
@@ -74,7 +84,7 @@ class CommandDefinition:
         return self._is_query
 
     @property
-    def cmd_id(self) -> CmdID:
+    def cmd_id(self) -> _CmdID:
         return self._cmd_id
 
     @property
@@ -103,7 +113,7 @@ class CommandDefinition:
                '\r\n'
 
 
-class DataStream(NamedTuple):
+class _DataStream(NamedTuple):
     stream_id: DataStreamID
     cmd_abbrv: str  # abbreviation used in commands (acc, bat, and so on)
     resp_prefix: str  # prefix used by the server to identify streams
@@ -111,30 +121,30 @@ class DataStream(NamedTuple):
 
 # actually define commands:
 _cmd_defs = [
-    CommandDefinition(CmdID.DEV_DISCOVER,
-                      'device_discover_list', {},
-                      is_query=True),
-    CommandDefinition(CmdID.DEV_CONNECT_BTLE,
-                      'device_connect_btle', {'dev': str, 'timeout': int},
-                      is_query=False),
-    CommandDefinition(CmdID.DEV_DISCONNECT_BTLE,
-                      'device_disconnect_btle', {'dev': str},
-                      is_query=False),
-    CommandDefinition(CmdID.DEV_LIST,
-                      'device_list', {},
-                      is_query=True),
-    CommandDefinition(CmdID.DEV_CONNECT,
-                      'device_connect', {'dev': str},
-                      is_query=False),
-    CommandDefinition(CmdID.DEV_DISCONNECT,
-                      'device_disconnect', {},
-                      is_query=False),
-    CommandDefinition(CmdID.DEV_SUBSCRIBE,
-                      'device_subscribe', {'stream': str, 'on': bool},
-                      is_query=False),
-    CommandDefinition(CmdID.DEV_PAUSE,
-                      'pause', {'on': bool},
-                      is_query=False)
+    _CommandDefinition(_CmdID.DEV_DISCOVER,
+                       'device_discover_list', {},
+                       is_query=True),
+    _CommandDefinition(_CmdID.DEV_CONNECT_BTLE,
+                       'device_connect_btle', {'dev': str, 'timeout': int},
+                       is_query=False),
+    _CommandDefinition(_CmdID.DEV_DISCONNECT_BTLE,
+                       'device_disconnect_btle', {'dev': str},
+                       is_query=False),
+    _CommandDefinition(_CmdID.DEV_LIST,
+                       'device_list', {},
+                       is_query=True),
+    _CommandDefinition(_CmdID.DEV_CONNECT,
+                       'device_connect', {'dev': str},
+                       is_query=False),
+    _CommandDefinition(_CmdID.DEV_DISCONNECT,
+                       'device_disconnect', {},
+                       is_query=False),
+    _CommandDefinition(_CmdID.DEV_SUBSCRIBE,
+                       'device_subscribe', {'stream': str, 'on': bool},
+                       is_query=False),
+    _CommandDefinition(_CmdID.DEV_PAUSE,
+                       'pause', {'on': bool},
+                       is_query=False)
 ]
 
 # set up mappings for the commands
@@ -146,17 +156,17 @@ for cmd_def in _cmd_defs:
 
 # define streams:
 _stream_defs = [
-    DataStream(DataStreamID.ACC, 'acc', 'E4_Acc'),
-    DataStream(DataStreamID.BVP, 'bvp', 'E4_Bvp'),
-    DataStream(DataStreamID.GSR, 'gsr', 'E4_Acc'),
-    DataStream(DataStreamID.TEMP, 'tmp', 'E4_Temp'),
+    _DataStream(DataStreamID.ACC, 'acc', 'E4_Acc'),
+    _DataStream(DataStreamID.BVP, 'bvp', 'E4_Bvp'),
+    _DataStream(DataStreamID.GSR, 'gsr', 'E4_Acc'),
+    _DataStream(DataStreamID.TEMP, 'tmp', 'E4_Temp'),
     # Interbeat interval and heartrate share the same command abbreviation,
     # i.e., can't subscribe to one without the other
-    DataStream(DataStreamID.IBI, 'ibi', 'E4_Ibi'),
-    DataStream(DataStreamID.HR, 'ibi', 'E4_Hr'),
+    _DataStream(DataStreamID.IBI, 'ibi', 'E4_Ibi'),
+    _DataStream(DataStreamID.HR, 'ibi', 'E4_Hr'),
     # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-    DataStream(DataStreamID.BAT, 'bat', 'E4_Battery'),
-    DataStream(DataStreamID.TAG, 'tag', 'E4_Tag')
+    _DataStream(DataStreamID.BAT, 'bat', 'E4_Battery'),
+    _DataStream(DataStreamID.TAG, 'tag', 'E4_Tag')
 ]
 
 # easy lookup mappings for streams
@@ -170,35 +180,29 @@ for stream in _stream_defs:
 
 
 # definitions for the replies:
-class ServerMessageType(Enum):
+class _ServerMessageType(Enum):
     STATUS_RESP = 0
     QUERY_REPLY = 1
     STREAM_DATA = 2
 
 
-class CmdStatus(Enum):
+class _CmdStatus(Enum):
     SUCCESS = 0
     ERROR = 1
 
 
-class StreamingDataSample(NamedTuple):
-    stream: DataStreamID
-    timestamp: float
-    data: Tuple[float]
-
-
-class ServerReply(NamedTuple):
-    command: CmdID
-    status: CmdStatus
+class _ServerReply(NamedTuple):
+    command: _CmdID
+    status: _CmdStatus
     data: Optional[str]
 
 
-def gen_command_string(cmd_id: CmdID, **kwargs) -> str:
+def _gen_command_string(cmd_id: _CmdID, **kwargs) -> str:
     return _id_to_cmd[cmd_id].gen_cmd_string(**kwargs)
 
 
-def parse_incoming_message(message: str) \
-        -> Tuple[ServerMessageType, Union[ServerReply, StreamingDataSample]]:
+def _parse_incoming_message(message: str) \
+        -> Tuple[_ServerMessageType, Union[_ServerReply, StreamingDataSample]]:
     # split message on whitespace
     msg_t, _, message = message.partition(' ')
 
@@ -210,33 +214,33 @@ def parse_incoming_message(message: str) \
 
         if cmd.is_query:
             # response is a response to query, so it doesn't include OK/ERR
-            return ServerMessageType.QUERY_REPLY, \
-                   ServerReply(command=cmd.cmd_id,
-                               status=CmdStatus.SUCCESS,
-                               data=message)
+            return _ServerMessageType.QUERY_REPLY, \
+                   _ServerReply(command=cmd.cmd_id,
+                                status=_CmdStatus.SUCCESS,
+                                data=message)
         else:
             # response is a status response
             # special handling for subscription responses as those include
             # the stream before the status message...
-            if cmd.cmd_id == CmdID.DEV_SUBSCRIBE:
+            if cmd.cmd_id == _CmdID.DEV_SUBSCRIBE:
                 # pop the stream from the string
                 _, _, message = message.partition(' ')
-            elif cmd.cmd_id == CmdID.DEV_PAUSE:
+            elif cmd.cmd_id == _CmdID.DEV_PAUSE:
                 # also special handling for Pause since it echoes back ON or
                 # OFF instead of OK/ERR ... Who designed this PoS API??
-                return ServerMessageType.STATUS_RESP, \
-                       ServerReply(command=cmd.cmd_id,
-                                   status=CmdStatus.SUCCESS,
-                                   data=None)
+                return _ServerMessageType.STATUS_RESP, \
+                       _ServerReply(command=cmd.cmd_id,
+                                    status=_CmdStatus.SUCCESS,
+                                    data=None)
 
             status_str, _, message = message.partition(' ')
-            status = CmdStatus.SUCCESS \
-                if status_str == 'OK' else CmdStatus.ERROR
+            status = _CmdStatus.SUCCESS \
+                if status_str == 'OK' else _CmdStatus.ERROR
 
-            return ServerMessageType.STATUS_RESP, \
-                   ServerReply(command=cmd.cmd_id,
-                               status=status,
-                               data=None)
+            return _ServerMessageType.STATUS_RESP, \
+                   _ServerReply(command=cmd.cmd_id,
+                                status=status,
+                                data=None)
 
     elif msg_t.startswith('E4_'):
         # subscription data
@@ -245,7 +249,7 @@ def parse_incoming_message(message: str) \
         timestamp = float(payload[0])
         data = tuple(float(d) for d in payload[1:])
 
-        return ServerMessageType.STREAM_DATA, \
+        return _ServerMessageType.STREAM_DATA, \
                StreamingDataSample(sub_id, timestamp, data)
 
     else:
