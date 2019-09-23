@@ -168,7 +168,7 @@ _stream_defs = [
     _DataStream(E4DataStreamID.ACC, 'acc', 'E4_Acc'),
     _DataStream(E4DataStreamID.BVP, 'bvp', 'E4_Bvp'),
     _DataStream(E4DataStreamID.GSR, 'gsr', 'E4_Gsr'),
-    _DataStream(E4DataStreamID.TEMP, 'tmp', 'E4_Temp'),
+    _DataStream(E4DataStreamID.TEMP, 'tmp', 'E4_Temperature'),
     # Interbeat interval and heartrate share the same command abbreviation,
     # i.e., can't subscribe to one without the other
     _DataStream(E4DataStreamID.IBI, 'ibi', 'E4_Ibi'),
