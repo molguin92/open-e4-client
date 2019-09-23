@@ -109,9 +109,11 @@ class _CommandDefinition:
                                    f'Expected {self._args[kwarg]}, but '
                                    f'got {type(val)}.')
 
-            # turn booleans into on/off
+            # turn booleans into on/off and stream ids into strings
             if type(val) == bool:
                 kwargs[kwarg] = 'ON' if val else 'OFF'
+            elif type(val) == DataStreamID:
+                kwargs[kwarg] = _id_to_stream[val].cmd_abbrv
 
         # generate the actual string
         return f'{self._cmd} ' + \
@@ -146,7 +148,8 @@ _cmd_defs = [
                        'device_disconnect', {},
                        is_query=False),
     _CommandDefinition(_CmdID.DEV_SUBSCRIBE,
-                       'device_subscribe', {'stream': str, 'on': bool},
+                       'device_subscribe',
+                       {'stream': DataStreamID, 'on': bool},
                        is_query=False),
     _CommandDefinition(_CmdID.DEV_PAUSE,
                        'pause', {'on': bool},
