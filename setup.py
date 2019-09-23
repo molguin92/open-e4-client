@@ -1,8 +1,8 @@
 import setuptools
 
 setuptools.setup(
-    name="e4client",
-    version="0.0.1",
+    name="open-e4-client",
+    version="0.0.3beta1",
     author="Manuel Olguin Munoz",
     author_email="molguin@kth.se",
     description="Simple, pure Python 3.7 client for the "
