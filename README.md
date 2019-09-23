@@ -9,8 +9,15 @@ None, runs on pure Python 3.7+.
 
 ### Setting up through Pip:
 
+The library can easily be installed from PyPi by running:
+
+```bash
+pip install open-e4-client
 ```
-\\ coming up
+
+Alternatively, it can be installed from the github repo itself:
+```bash
+pip install git+https://github.com/molguin92/open-e4-client.git
 ```
 
 ## Basic Usage
