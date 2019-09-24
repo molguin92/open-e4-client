@@ -277,6 +277,22 @@ class E4StreamingClient(AbstractContextManager):
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
 
+    def pause(self) -> None:
+        """
+        Pause the streaming of sensor data from the currently connected E4.
+        """
+        resp = self._send_command(_CmdID.DEV_PAUSE, on=True)
+        if resp.status != _CmdStatus.SUCCESS:
+            raise ServerRequestError(resp.data)
+
+    def resume(self) -> None:
+        """
+        Resume streaming of sensor data from the currently connected E4.
+        """
+        resp = self._send_command(_CmdID.DEV_PAUSE, on=False)
+        if resp.status != _CmdStatus.SUCCESS:
+            raise ServerRequestError(resp.data)
+
     def close(self) -> None:
         """
         Closes the connection to the server and shuts down the receiving
@@ -316,9 +332,14 @@ class E4DeviceConnection(AbstractContextManager):
         self._subscriptions = set()
 
         self._logger = logging.getLogger(self.__class__.__name__)
+        self._paused = False
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.disconnect()
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
 
     @property
     def uid(self) -> str:
@@ -342,6 +363,15 @@ class E4DeviceConnection(AbstractContextManager):
         self._client.subscribe_to_stream(stream)
         self._subscriptions.add(stream)
         return self._client.sub_qs[stream]
+
+    def toggle_pause(self) -> None:
+        """
+        Pause/resume streaming of sensor data from this client connection.
+        """
+        if self._paused:
+            self._client.resume()
+        else:
+            self._client.pause()
 
     def unsubscribe_from_stream(self, stream: E4DataStreamID) -> None:
         """
