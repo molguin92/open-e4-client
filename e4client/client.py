@@ -164,7 +164,10 @@ class E4StreamingClient(AbstractContextManager):
         assert resp.command == cmd_id
         return resp
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """
+        Closes this client. See E4StreamingClient.close().
+        """
         self.close()
 
     # public convenience methods follow:
@@ -334,7 +337,10 @@ class E4DeviceConnection(AbstractContextManager):
         self._logger = logging.getLogger(self.__class__.__name__)
         self._paused = False
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """
+        Closes this device connection. See E4DeviceConnection.disconnect().
+        """
         self.disconnect()
 
     @property
