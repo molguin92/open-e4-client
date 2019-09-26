@@ -8,6 +8,8 @@ import scipy.stats
 
 from e4client import *
 
+plt.style.use('bmh')
+
 
 # Nominal sampling rates for the E4:
 #
@@ -79,8 +81,8 @@ Variance: {inter_var} s
 
 
 if __name__ == '__main__':
-    bench_cnt = 5
-    bench_time = 1
+    bench_cnt = 20
+    bench_time = 10
     # connect to client:
     with E4StreamingClient('192.168.56.101', 28000) as client:
         device = client.list_connected_devices()[0]
