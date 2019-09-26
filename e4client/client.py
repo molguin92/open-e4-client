@@ -137,6 +137,9 @@ class E4StreamingClient(AbstractContextManager):
                     self._logger.debug(f'Parsed message: {parsed_msg}')
 
                     if msg_type == _ServerMessageType.STREAM_DATA:
+                        self._logger.debug(
+                            f'Got sample for {parsed_msg.stream}, putting '
+                            f'into queue...')
                         self._sub_qs[parsed_msg.stream].put(
                             (parsed_msg.timestamp, *parsed_msg.data))
                     else:
