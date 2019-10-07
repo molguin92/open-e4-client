@@ -22,13 +22,11 @@ class E4StreamingClient(AbstractContextManager):
     """Empatica E4 streaming server full-duplex TCP client.
 
     Implements a client for the Empatica E4 streaming server, providing
-    convenience methods for commands. Note that this object instantiates an
-    internal thread for full-duplex TCP communication.
+    convenience methods for commands. Note that this object instantiates two
+    additional internal threads, one for full duplex communication and one
+    for callback execution.
 
     Attributes:
-
-    subs_qs (Dict[str, queue.Queue]): dictionary object linking each unique
-    E4StreamID to a separate queue.Queue object for subscription management.
 
     is_connected (bool): flag indicating whether the client is currently
     connected to the server.
@@ -43,8 +41,7 @@ class E4StreamingClient(AbstractContextManager):
                  max_conn_attempts: int = 20):
         """
         Instantiate a new E4StreamingClient. Note that the client will
-        immediately attempt to connect and spin up a separate thread to read
-        data from the server on instantiation.
+        immediately attempt to connect on instantiation.
 
         :param server_ip: IP address of the Streaming Server.
         :param server_port: TCP port of the Streaming Server.
@@ -97,15 +94,6 @@ class E4StreamingClient(AbstractContextManager):
         self._recv_thread.start()
         self._callback_thread.start()
 
-    # @property
-    # def sub_qs(self) -> Dict[E4DataStreamID, 'queue.Queue[Tuple]']:
-    #     """
-    #     Dictionary object linking each unique E4StreamID to a separate
-    #     queue.Queue object for subscription management. Each queue contains
-    #     tuples of the form (timestamp, datum_0, datum_1, ..., datum_n).
-    #     """
-    #     return self._sub_qs
-
     @property
     def is_connected(self) -> bool:
         """
@@ -116,6 +104,12 @@ class E4StreamingClient(AbstractContextManager):
     def _try_callback_for_stream_sample(self,
                                         stream: E4DataStreamID,
                                         *sample) -> None:
+        """
+        Helper method to execute callbacks for individual samples.
+
+        :param stream: Stream to which sample belongs.
+        :param sample: Data sample.
+        """
         with self._callback_lock:
             callback = self._sub_callbacks.get(stream, None)
 
@@ -131,6 +125,9 @@ class E4StreamingClient(AbstractContextManager):
                                f'without an active callback!')
 
     def _callback_loop(self):
+        """
+        Callback handler thread loop.
+        """
         self._logger.debug('Starting callback handler thread...')
 
         while not self._shutdown.is_set():
@@ -153,6 +150,9 @@ class E4StreamingClient(AbstractContextManager):
         self._logger.debug('Shut down callback handler thread.')
 
     def _recv_loop(self):
+        """
+        Socket read loop.
+        """
         self._logger.debug('Starting receiving thread...')
 
         data = b''
@@ -180,6 +180,7 @@ class E4StreamingClient(AbstractContextManager):
                     self._logger.debug(f'Parsed message: {parsed_msg}')
 
                     if msg_type == _ServerMessageType.STREAM_DATA:
+                        # TODO: FIX TIMESTAMPS
                         self._logger.debug(
                             f'Got sample for {parsed_msg.stream}, putting '
                             f'into callback queue...')
@@ -201,12 +202,24 @@ class E4StreamingClient(AbstractContextManager):
 
         self._logger.debug('Shut down receiving thread...')
 
-    def _send(self, cmd: str):
+    def _send(self, cmd: str) -> None:
+        """
+        Send a raw string to the server.
+
+        :param cmd: Raw string to send.
+        """
         self._logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
         self._socket.sendall(cmd.encode('utf-8'))
 
     def _send_command(self, cmd_id: _CmdID, **kwargs) \
             -> _ServerReply:
+        """
+        Send a command to the server.
+
+        :param cmd_id: Command ID.
+        :param kwargs: Arguments associated with the command.
+        :return: Reply from the server.
+        """
         self._send(_gen_command_string(cmd_id, **kwargs))
         resp = self._resp_q.get(block=True)
 
@@ -312,6 +325,8 @@ class E4StreamingClient(AbstractContextManager):
         Subscribes to the specified stream on the currently connected E4.
 
         :param stream: Stream to subscribe to.
+        :param callback: Callback to execute for each received sample in the
+        subscribed stream.
         """
         with self._callback_lock:
             if stream in self._sub_callbacks.keys():
