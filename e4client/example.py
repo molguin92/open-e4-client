@@ -3,8 +3,8 @@ import time
 from e4client import *
 
 
-def print_sub(timestamp, *sample) -> None:
-    print(timestamp, *sample)
+def print_sub(stream_id, timestamp, *sample) -> None:
+    print(stream_id, timestamp, *sample)
 
 
 if __name__ == '__main__':
