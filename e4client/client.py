@@ -6,7 +6,7 @@ import socket
 import threading
 import time
 from contextlib import AbstractContextManager
-from typing import Dict, Tuple, Union
+from typing import Any, Callable, Tuple, Union
 
 from e4client.exceptions import BTLEConnectionError, DeviceNotFoundError, \
     ServerRequestError
@@ -58,9 +58,12 @@ class E4StreamingClient(AbstractContextManager):
 
         # set up buffers for responses and subscriptions
         self._resp_q = queue.Queue(maxsize=1)
-        self._sub_qs = {
-            stream_id: queue.Queue() for stream_id in E4DataStreamID
-        }
+        self._sub_callbacks = {}
+        self._callback_lock = threading.RLock()
+        self._callback_q = queue.Queue()
+
+        self._shutdown = threading.Event()
+        self._shutdown.clear()
 
         self._logger.info(f'Connecting to {server_ip}:{server_port}...')
 
@@ -89,18 +92,19 @@ class E4StreamingClient(AbstractContextManager):
 
         self._connected = True
 
-        self._recv_thread = threading.Thread(target=self._recv_loop,
-                                             daemon=True)
+        self._recv_thread = threading.Thread(target=self._recv_loop)
+        self._callback_thread = threading.Thread(target=self._callback_loop)
         self._recv_thread.start()
+        self._callback_thread.start()
 
-    @property
-    def sub_qs(self) -> Dict[E4DataStreamID, 'queue.Queue[Tuple]']:
-        """
-        Dictionary object linking each unique E4StreamID to a separate
-        queue.Queue object for subscription management. Each queue contains
-        tuples of the form (timestamp, datum_0, datum_1, ..., datum_n).
-        """
-        return self._sub_qs
+    # @property
+    # def sub_qs(self) -> Dict[E4DataStreamID, 'queue.Queue[Tuple]']:
+    #     """
+    #     Dictionary object linking each unique E4StreamID to a separate
+    #     queue.Queue object for subscription management. Each queue contains
+    #     tuples of the form (timestamp, datum_0, datum_1, ..., datum_n).
+    #     """
+    #     return self._sub_qs
 
     @property
     def is_connected(self) -> bool:
@@ -109,11 +113,50 @@ class E4StreamingClient(AbstractContextManager):
         """
         return self._connected
 
+    def _try_callback_for_stream_sample(self,
+                                        stream: E4DataStreamID,
+                                        *sample) -> None:
+        with self._callback_lock:
+            callback = self._sub_callbacks.get(stream, None)
+
+        if callback:
+            try:
+                callback(stream, *sample)
+            except Exception as e:
+                self._logger.error(f'Callback for stream '
+                                   f'{stream.name} failed with '
+                                   f'exception.', e)
+        else:
+            self._logger.error(f'Got sample for stream {stream.name} '
+                               f'without an active callback!')
+
+    def _callback_loop(self):
+        self._logger.debug('Starting callback handler thread...')
+
+        while not self._shutdown.is_set():
+            try:
+                # TODO: fix magic number
+                stream, *sample = self._callback_q.get(block=True, timeout=0.01)
+                self._try_callback_for_stream_sample(stream, *sample)
+                self._callback_q.task_done()
+            except queue.Empty():
+                pass
+
+        self._logger.debug('Shutting down callback handler thread, executing '
+                           'callbacks for remaining items in queue.')
+
+        while not self._callback_q.empty():
+            stream, *sample = self._callback_q.get(block=False)
+            self._try_callback_for_stream_sample(stream, *sample)
+            self._callback_q.task_done()
+
+        self._logger.debug('Shut down callback handler thread.')
+
     def _recv_loop(self):
         self._logger.debug('Starting receiving thread...')
 
         data = b''
-        while True:
+        while not self._shutdown.is_set():
             try:
                 # small block size since messages are short
                 data += self._socket.recv(64)
@@ -139,9 +182,10 @@ class E4StreamingClient(AbstractContextManager):
                     if msg_type == _ServerMessageType.STREAM_DATA:
                         self._logger.debug(
                             f'Got sample for {parsed_msg.stream}, putting '
-                            f'into queue...')
-                        self._sub_qs[parsed_msg.stream].put(
-                            (parsed_msg.timestamp, *parsed_msg.data))
+                            f'into callback queue...')
+                        self._callback_q.put((parsed_msg.stream,
+                                              parsed_msg.timestamp,
+                                              *parsed_msg.data))
                     else:
                         while True:
                             try:
@@ -151,9 +195,11 @@ class E4StreamingClient(AbstractContextManager):
                                 break
 
             except socket.error as e:
+                self._logger.debug('Socket error.')
                 self._logger.debug(e)
-                self._logger.debug('Shutting down receiving thread...')
-                return
+                break
+
+        self._logger.debug('Shut down receiving thread...')
 
     def _send(self, cmd: str):
         self._logger.debug(f'Sending \'{cmd.encode("utf-8")}\' to server.')
@@ -259,16 +305,29 @@ class E4StreamingClient(AbstractContextManager):
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
 
-    def subscribe_to_stream(self, stream: E4DataStreamID) -> None:
+    def subscribe_to_stream(self,
+                            stream: E4DataStreamID,
+                            callback: Callable[..., Any]) -> None:
         """
         Subscribes to the specified stream on the currently connected E4.
 
         :param stream: Stream to subscribe to.
         """
+        with self._callback_lock:
+            if stream in self._sub_callbacks.keys():
+                self._logger.error(f'Already subscribed to {stream.name}, '
+                                   f'need to unsubscribe first to change '
+                                   f'callback.')
+                return
+            else:
+                self._sub_callbacks[stream] = callback
+
         resp = self._send_command(_CmdID.DEV_SUBSCRIBE,
                                   stream=stream, on=True)
 
         if resp.status != _CmdStatus.SUCCESS:
+            with self._callback_lock:
+                del self._sub_callbacks[stream]
             raise ServerRequestError(resp.data)
 
     def unsubscribe_from_stream(self, stream: E4DataStreamID) -> None:
@@ -282,6 +341,12 @@ class E4StreamingClient(AbstractContextManager):
 
         if resp.status != _CmdStatus.SUCCESS:
             raise ServerRequestError(resp.data)
+        else:
+            try:
+                with self._callback_lock:
+                    del self._sub_callbacks[stream]
+            except KeyError:
+                pass
 
     def pause(self) -> None:
         """
@@ -301,16 +366,19 @@ class E4StreamingClient(AbstractContextManager):
 
     def close(self) -> None:
         """
-        Closes the connection to the server and shuts down the receiving
-        thread. Note that the client is left in an unusable state after this
-        and cannot be reconnected to the server.
+        Closes the connection to the server and shuts down the receiving and
+        callback threads. Note that the client is left in an unusable state
+        after this and cannot be reconnected to the server.
 
         Multiple calls to close() have no effect.
         """
         if self._connected:
+            self._shutdown.set()
             self._socket.shutdown(socket.SHUT_RDWR)
             self._socket.close()
+            self._callback_q.join()
             self._recv_thread.join()
+            self._callback_thread.join()
             self._connected = False
 
 
@@ -357,21 +425,25 @@ class E4DeviceConnection(AbstractContextManager):
         """
         return self._dev
 
-    def subscribe_to_stream(self, stream: E4DataStreamID) \
-            -> 'queue.Queue[Tuple]':
+    def subscribe_to_stream(self,
+                            stream: E4DataStreamID,
+                            callback: Callable[..., Any]) -> None:
         """
         Subscribes to the specified stream on the currently connected E4 device.
-        Returns a queue.Queue object in which the received samples will be
-        deposited by the receiving thread on the client. The queue returns
-        tuples of the form (timestamp, datum_0, datum_1, ..., datum_n).
+        Each sample received for the stream will then be passed on to the
+        specified callback. Note that the callback will be executed on a
+        separate thread and should have a signature of the form:
+
+
+        def callback(<stream id>, <timestamp>, <payload 1>, <payload 2>, ...)
+
 
         :param stream: stream to subscribe to.
-        :return: queue.Queue in which the samples will be deposited.
+        :param callback: Callback for the subscribed stream.
         """
         self._logger.debug(f'Subscribing to {stream}.')
-        self._client.subscribe_to_stream(stream)
+        self._client.subscribe_to_stream(stream, callback)
         self._subscriptions.add(stream)
-        return self._client.sub_qs[stream]
 
     def toggle_pause(self) -> None:
         """
