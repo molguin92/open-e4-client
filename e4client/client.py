@@ -136,7 +136,7 @@ class E4StreamingClient(AbstractContextManager):
                 stream, *sample = self._callback_q.get(block=True, timeout=0.01)
                 self._try_callback_for_stream_sample(stream, *sample)
                 self._callback_q.task_done()
-            except queue.Empty():
+            except queue.Empty:
                 pass
 
         self._logger.debug('Shutting down callback handler thread, executing '

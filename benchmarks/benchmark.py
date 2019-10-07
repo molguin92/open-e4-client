@@ -11,6 +11,9 @@ from e4client import *
 plt.style.use('bmh')
 
 
+# TODO: update to use callbacks!!
+
+
 # Nominal sampling rates for the E4:
 #
 #    Blood volume pulse,@64Hz
