@@ -8,9 +8,9 @@ import time
 from contextlib import AbstractContextManager
 from typing import Any, Callable, Tuple, Union
 
-from e4client.exceptions import BTLEConnectionError, DeviceNotFoundError, \
+from .exceptions import BTLEConnectionError, DeviceNotFoundError, \
     ServerRequestError
-from e4client.protocol import E4DataStreamID, E4Device, _CmdID, _CmdStatus, \
+from .protocol import E4DataStreamID, E4Device, _CmdID, _CmdStatus, \
     _ServerMessageType, _ServerReply, _gen_command_string, _parse_device_list, \
     _parse_incoming_message
 
