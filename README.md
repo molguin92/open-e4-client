@@ -2,7 +2,7 @@
 
 # open-e4-client
 
-Pure Python 3.7+ client for the [Empatica E4](https://www.empatica.com/research/e4/) realtime [streaming server.](http://developer.empatica.com/windows-streaming-server.html) 
+Pure Python 3.7+ client for the [Empatica E4](https://www.empatica.com/research/e4/) realtime [streaming server](http://developer.empatica.com/windows-streaming-server.html).
 
 ## Installation
 ### Dependencies: 
@@ -23,6 +23,8 @@ pip install git+https://github.com/molguin92/open-e4-client.git
 ```
 
 ## Basic Usage
+
+Make sure the Empatica E4 realtime streaming server is launched with administrator priviledges (relative to [this issue](https://github.com/Munroe-Meyer-Institute-VR-Laboratory/pyEmpatica/issues/1))
 
 This library provides a simple class `E4StreamingClient` to interact with the Empatica E4 streaming server. This class is intended to be used as a context manager for easy cleanup of the underlying socket objects:
 
