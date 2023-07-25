@@ -1,6 +1,6 @@
 import time
 
-from e4client import *
+from . import *
 
 
 def print_sub(stream_id, timestamp, *sample) -> None:
