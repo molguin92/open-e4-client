@@ -223,9 +223,9 @@ def _parse_incoming_message(message: str) \
         if cmd.is_query:
             # response is a response to query, so it doesn't include OK/ERR
             return _ServerMessageType.QUERY_REPLY, \
-                   _ServerReply(command=cmd.cmd_id,
-                                status=_CmdStatus.SUCCESS,
-                                data=message)
+                _ServerReply(command=cmd.cmd_id,
+                             status=_CmdStatus.SUCCESS,
+                             data=message)
         else:
             # response is a status response
             # special handling for subscription responses as those include
@@ -237,28 +237,28 @@ def _parse_incoming_message(message: str) \
                 # also special handling for Pause since it echoes back ON or
                 # OFF instead of OK/ERR ... Who designed this PoS API??
                 return _ServerMessageType.STATUS_RESP, \
-                       _ServerReply(command=cmd.cmd_id,
-                                    status=_CmdStatus.SUCCESS,
-                                    data=None)
+                    _ServerReply(command=cmd.cmd_id,
+                                 status=_CmdStatus.SUCCESS,
+                                 data=None)
 
             status_str, _, message = message.partition(' ')
             status = _CmdStatus.SUCCESS \
                 if status_str == 'OK' else _CmdStatus.ERROR
 
             return _ServerMessageType.STATUS_RESP, \
-                   _ServerReply(command=cmd.cmd_id,
-                                status=status,
-                                data=None)
+                _ServerReply(command=cmd.cmd_id,
+                             status=status,
+                             data=None)
 
     elif msg_t.startswith('E4_'):
         # subscription data
         sub_id = _prefix_to_stream[msg_t].stream_id
-        payload = message.split(' ')
+        payload = message.replace(',', '.').split(' ')
         timestamp = float(payload[0])
         data = tuple(float(d) for d in payload[1:])
 
         return _ServerMessageType.STREAM_DATA, \
-               _E4StreamingDataSample(sub_id, timestamp, data)
+            _E4StreamingDataSample(sub_id, timestamp, data)
 
     else:
         # TODO?
